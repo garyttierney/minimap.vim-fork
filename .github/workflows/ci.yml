@@ -17,7 +17,15 @@ jobs:
           pre-commit run --all-files || { git diff --color=always && exit 1; }
   unit-tests:
     name: Unit Tests
-    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        os: [windows-2022, ubuntu-20.04]
+        include:
+          - os: windows-2022
+            NEOVIM_CONFIG_PATH: ~/AppData/Local/nvim
+          - os: ubuntu-20.04
+            NEOVIM_CONFIG_PATH: $HOME/.config/nvim
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
       - name: Setup Vim
@@ -26,16 +34,24 @@ jobs:
           neovim: true
       - name: Ensure plugins directory exists
         run: |
-          mkdir -p $HOME/.config/nvim/plugins
+          mkdir -p ${{ matrix.NEOVIM_CONFIG_PATH }}/plugins
       - name: Create a fake code-minimap executable
         # Necessary for minimap.vim to start up
         run: |
           mkdir -p "$HOME/bin"
           ln -s /bin/echo "$HOME/bin/code-minimap"
           echo "$HOME/bin" >> $GITHUB_PATH
+        if: !contains(matrix.os, 'windows')
+
+      - name: Create a fake code-minimap executable (Windows)
+        run: |
+          mkdir -p ~/bin
+          mklink /H ~/bin/code-minimap.exe $SYSTEM/rundll32.exe
+        if: contains(matrix.os, 'windows')
+
       - name: Checkout Testify
         run: |
-          git clone --depth 1 https://github.com/dhruvasagar/vim-testify $HOME/.config/nvim/plugins/vim-testify
+          git clone --depth 1 https://github.com/dhruvasagar/vim-testify ${{ matrix.NEOVIM_CONFIG_PATH }}/plugins/vim-testify
       - name: Run Unit Tests
         run: |
-          nvim -c "set rtp+=$HOME/.config/nvim/plugins/vim-testify" -c "set rtp+=./" -S $HOME/.config/nvim/plugins/vim-testify/plugin/testify.vim -S ./plugin/minimap.vim +TestifySuite
+          nvim -c "set rtp+=${{ matrix.NEOVIM_CONFIG_PATH }}/plugins/vim-testify" -c "set rtp+=./" -S ${{ matrix.NEOVIM_CONFIG_PATH }}/plugins/vim-testify/plugin/testify.vim -S ./plugin/minimap.vim +TestifySuite
